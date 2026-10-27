@@ -30,8 +30,8 @@
     <div class="panel-heading"><span class="step">01</span><h2 id="listen-title">課題曲を聴く</h2><span id="listen-count" class="small-tag">何度でも</span></div>
     <audio id="practice" controls preload="metadata" src="./assets/practice.wav" aria-label="課題曲のお手本"></audio>
     <div class="listen-bottom"><label class="check"><input id="loop" type="checkbox"> 繰り返し聴く</label></div>
-    <div class="note-key"><span>ノートの高さ</span><button id="key-down" class="secondary" type="button" aria-label="ノートを半音下げる" disabled>−</button><output id="key-value">0</output><button id="key-up" class="secondary" type="button" aria-label="ノートを半音上げる" disabled>＋</button><button id="key-reset" class="text-button" type="button" disabled>原曲</button></div>
-    <div class="pitch-test-actions"><button id="pitch-test" class="secondary" type="button" aria-pressed="false" disabled>音程テスト</button><button id="test-tone" class="secondary" type="button" disabled>基準音</button><span id="test-target">C4</span></div>
+    <div class="note-key"><span>ノートの高さ</span><button id="key-down" class="secondary" type="button" aria-label="ノートを半音下げる" disabled>−</button><output id="key-value">-12</output><button id="key-up" class="secondary" type="button" aria-label="ノートを半音上げる" disabled>＋</button><button id="key-reset" class="text-button" type="button" disabled>原曲</button></div>
+    <div class="pitch-test-actions"><button id="pitch-test" class="secondary" type="button" aria-pressed="false" disabled>音程テスト</button><button id="test-tone" class="secondary" type="button" disabled>基準音</button><span id="test-target">C3</span></div>
     <div id="pitch-probe" class="pitch-probe" hidden><output id="test-reading" aria-live="polite">—</output><label class="probe-level">入力 <meter id="test-level" min="0" max="0.2" value="0"></meter></label><label class="probe-gain">入力感度 <input id="mic-gain" type="range" min="1" max="4" step="0.25" value="1"><output id="gain-value">1×</output></label></div>
    </section>
    <section class="panel challenge-panel" aria-labelledby="challenge-title">

@@ -1,6 +1,6 @@
 // Standard MIDI File reader: variable-length deltas, running status and tempo map.
 export function transposeSong(song,semitones){
- if(!Number.isInteger(semitones)||Math.abs(semitones)>12)throw Error('ノートの高さは-12〜+12半音です');
+ if(!Number.isInteger(semitones)||semitones<-24||semitones>12)throw Error('ノートの高さは-24〜+12半音です');
  return {...song,notes:song.notes.map(note=>({...note,midi:note.midi+semitones}))};
 }
 

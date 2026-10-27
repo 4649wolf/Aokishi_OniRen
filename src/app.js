@@ -5,7 +5,7 @@ import {createCompositor,drawNotes} from './renderer.js';
 const $=id=>document.getElementById(id);
 const video=$('performance'),camera=$('camera'),practice=$('practice');
 let song,baseSong,compositor,cameraCompositor,micStream,cameraStream,audioContext,analyser,micSource,micGain;
-let noteShift=0,testing=false,inputGain=1,toneContext=null,tone=null,toneRun=0;
+let noteShift=-12,testing=false,inputGain=1,toneContext=null,tone=null,toneRun=0;
 const cameraOptions={key:'off',strength:50,brightness:.68};
 const offset=5,latency=.120;
 let frameBuffer=new Float32Array(4096),judge,playing=false,busy=false,run=0;
@@ -31,13 +31,13 @@ function refreshControls(){
  $('camera-key').disabled=busy;$('camera-strength').disabled=busy||cameraOptions.key==='off';
  $('mic-state').hidden=!active();
  $('pitch-test').disabled=playing||busy||starting||!song;$('test-tone').disabled=playing||busy||starting||!song;
- $('key-down').disabled=playing||starting||!song||noteShift<=-12;$('key-up').disabled=playing||starting||!song||noteShift>=12;$('key-reset').disabled=playing||starting||!song||noteShift===0;
+ $('key-down').disabled=playing||starting||!song||noteShift<=-24;$('key-up').disabled=playing||starting||!song||noteShift>=12;$('key-reset').disabled=playing||starting||!song||noteShift===0;
  $('mic-gain').disabled=playing||busy||starting;
  $('pitch-test').textContent=testing?'テストをやめる':'音程テスト';$('pitch-test').setAttribute('aria-pressed',String(testing));$('pitch-probe').hidden=!testing;
 }
 function stopTone(){toneRun++;if(tone){try{tone.stop();}catch{}tone.disconnect();tone=null;}}
 function setShift(value){
- if(playing||starting||!baseSong)return;noteShift=Math.max(-12,Math.min(12,Math.trunc(value)));song=transposeSong(baseSong,noteShift);
+ if(playing||starting||!baseSong)return;noteShift=Math.max(-24,Math.min(12,Math.trunc(value)));song=transposeSong(baseSong,noteShift);
  stopTone();judge=null;$('result').hidden=true;video.currentTime=0;lastVideo=-1;
  $('key-value').textContent=noteShift>0?`+${noteShift}`:String(noteShift);$('test-target').textContent=midiName(song.notes[0].midi);
  drawNotes($('notes'),song,-1,null,null);refreshControls();

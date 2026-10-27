@@ -9,7 +9,7 @@ export function detectPitch(buffer,sampleRate){
  const stride=Math.max(1,Math.floor(sampleRate/12000)),rate=sampleRate/stride;
  const data=new Float32Array(Math.floor(buffer.length/stride));
  for(let i=0;i<data.length;i++){let sum=0;for(let j=0;j<stride;j++)sum+=buffer[i*stride+j];data[i]=sum/stride;}
- const max=Math.min(Math.floor(rate/55),Math.floor(data.length/2)-1),min=Math.floor(rate/2000);
+ const max=Math.min(Math.floor(rate/30),Math.floor(data.length/2)-1),min=Math.floor(rate/2000);
  const diff=new Float32Array(max+1);let sum=0;diff[0]=1;
  for(let tau=1;tau<=max;tau++){
   let d=0;for(let i=0;i<data.length-max;i++){const delta=data[i]-data[i+tau];d+=delta*delta;}
@@ -19,7 +19,7 @@ export function detectPitch(buffer,sampleRate){
   while(tau+1<max&&diff[tau+1]<diff[tau])tau++;
   const a=diff[tau-1],b=diff[tau],c=diff[tau+1],den=2*(2*b-c-a);
   const refined=tau+(den?(c-a)/den:0),frequency=rate/refined;
-  if(frequency<55||frequency>2000)return null;
+  if(frequency<30||frequency>2000)return null;
   return {frequency,midi:frequencyToMidi(frequency),confidence:1-b,rms};
  }
  return null;
