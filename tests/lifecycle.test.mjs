@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {Judge} from '../src/pitch.js';
-import {parseMidi} from '../src/midi.js';
+import {parseMidi,transposeSong} from '../src/midi.js';
 
 const appSource=readFileSync(new URL('../src/app.js',import.meta.url),'utf8')
  .replace(/^import .*$/gm,'')
@@ -17,7 +17,7 @@ function harness({firstPlay,resume}={}){
   if(!elements.has(id))elements.set(id,{
    value:id==='offset'?'5':id==='latency'?'120':'',
    currentTime:0,duration:15.650227,readyState:4,paused:true,ended:false,
-   dataset:{},classList:{toggle(){}},addEventListener(){},focus(){},
+   dataset:{},classList:{toggle(){}},addEventListener(){},setAttribute(){},focus(){},
    pause(){this.paused=true;},
    play(){this.paused=false;if(id==='performance'&&++playCalls===1&&firstPlay)return firstPlay.promise;return Promise.resolve();}
   });
@@ -27,7 +27,7 @@ function harness({firstPlay,resume}={}){
  const sandbox=vm.createContext({
   document:{getElementById:element,addEventListener(){}},window:{addEventListener(){}},
   performance:{now:()=>now},requestAnimationFrame:()=>1,cancelAnimationFrame(){},
-  fetch:()=>new Promise(()=>{}),Judge,drawNotes(){},detectPitch:()=>null,midiName:()=>'',
+  fetch:()=>new Promise(()=>{}),Judge,transposeSong,drawNotes(){},detectPitch:()=>null,midiName:()=>'',
   testSong:song,testContext:context
  });
  vm.runInContext(appSource,sandbox);
@@ -75,4 +75,15 @@ test('leaving during audio resume does not keep controls locked on return',async
  pending.resolve();await oldStart;
  assert.equal(h.call('starting'),false,'page return must allow connecting devices again');
  assert.equal(h.call('playing'),false);
+});
+
+test('stopping a pending reference tone prevents late audio from starting',async()=>{
+ const h=harness();h.call('audioContext=null;var resumeTone,createdTones=0;toneContext={resume:()=>new Promise(resolve=>{resumeTone=resolve}),createOscillator(){createdTones++;throw Error("unexpected tone");}}');
+ const pending=h.call('playTestTone()');h.call('stopTone();resumeTone()');await pending;
+ assert.equal(h.call('createdTones'),0);
+});
+
+test('note key changes all targets and stays locked during a challenge',async()=>{
+ const h=harness();h.call('baseSong=testSong;setShift(-12)');assert.equal(h.call('song.notes[0].midi'),48);
+ await h.call('start()');h.call('setShift(12)');assert.equal(h.call('noteShift'),-12);assert.equal(h.call('song.notes[0].midi'),48);
 });

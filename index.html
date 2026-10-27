@@ -16,7 +16,6 @@
    <img class="backdrop" src="./assets/background.png" alt="">
    <video id="camera" class="source-video" autoplay muted playsinline aria-hidden="true"></video>
    <canvas id="camera-layer" class="camera-layer" width="1280" height="720" hidden aria-label="クロマキー処理したカメラ・VTuberの映像"></canvas>
-   <div id="camera-placeholder" class="camera-placeholder"><span class="camera-symbol">◎</span><p>あなたのステージ</p><small>カメラをつなぐと、ここに映ります</small></div>
    <video id="performance" class="source-video" preload="auto" playsinline disablepictureinpicture tabindex="-1" aria-hidden="true"><source src="./assets/performance.mp4" type="video/mp4"></video>
    <canvas id="composite" width="1920" height="1080" aria-label="背景を透過した課題曲の映像"></canvas>
    <canvas id="notes" width="1920" height="1080" aria-label="白い目標音程バー、黄色い正解部分、赤い音程外れ、青い現在地バーと歌い出しまでの吹き出し"></canvas>
@@ -25,12 +24,15 @@
     <div class="result-actions"><button id="retry" class="primary" type="button">もう一度挑戦</button><button id="back" class="secondary" type="button">準備に戻る</button></div>
    </div>
   </section>
-  <div class="live-strip"><div><span id="live-dot" class="dot"></span><span id="live-status">マイク接続前</span></div><span id="time">00:00 / 00:16</span></div>
+  <div class="live-strip"><div id="mic-state" hidden><span id="live-dot" class="dot"></span><span id="live-status"></span></div><span id="time">00:00 / 00:16</span></div>
   <div class="control-grid">
    <section class="panel listen-panel" aria-labelledby="listen-title">
     <div class="panel-heading"><span class="step">01</span><h2 id="listen-title">課題曲を聴く</h2><span id="listen-count" class="small-tag">何度でも</span></div>
     <audio id="practice" controls preload="metadata" src="./assets/practice.wav" aria-label="課題曲のお手本"></audio>
-    <div class="listen-bottom"><label class="check"><input id="loop" type="checkbox"> 繰り返し聴く</label><span>お手本音源 / 約11秒</span></div>
+    <div class="listen-bottom"><label class="check"><input id="loop" type="checkbox"> 繰り返し聴く</label></div>
+    <div class="note-key"><span>ノートの高さ</span><button id="key-down" class="secondary" type="button" aria-label="ノートを半音下げる" disabled>−</button><output id="key-value">0</output><button id="key-up" class="secondary" type="button" aria-label="ノートを半音上げる" disabled>＋</button><button id="key-reset" class="text-button" type="button" disabled>原曲</button></div>
+    <div class="pitch-test-actions"><button id="pitch-test" class="secondary" type="button" aria-pressed="false" disabled>音程テスト</button><button id="test-tone" class="secondary" type="button" disabled>基準音</button><span id="test-target">C4</span></div>
+    <div id="pitch-probe" class="pitch-probe" hidden><output id="test-reading" aria-live="polite">—</output><label class="probe-level">入力 <meter id="test-level" min="0" max="0.2" value="0"></meter></label><label class="probe-gain">入力感度 <input id="mic-gain" type="range" min="1" max="4" step="0.25" value="1"><output id="gain-value">1×</output></label></div>
    </section>
    <section class="panel challenge-panel" aria-labelledby="challenge-title">
     <div class="panel-heading"><span class="step">02</span><h2 id="challenge-title">曲に挑戦する</h2></div>
@@ -41,10 +43,9 @@
      <label class="camera-strength" for="camera-strength">透過の強さ <input id="camera-strength" type="range" min="0" max="100" step="1" value="50" disabled></label>
     </div></details>
     <div class="start-row"><button id="start" class="primary" type="button" disabled>挑戦をはじめる <span>→</span></button><button id="stop" class="secondary" type="button" hidden>中断する</button></div>
-    <p id="device-message" class="device-message" role="status">マイクを接続すると挑戦できます。</p>
+    <p id="device-message" class="device-message" role="status" hidden></p>
    </section>
   </div>
-  <footer><span>青騎士さん専用鬼レンチャン</span><span>カメラ・マイクは端末内で処理します。録音・外部送信はしません。</span></footer>
   <noscript>このアプリにはJavaScriptを有効にする必要があります。</noscript>
  </main>
  <script type="module" src="./src/app.js"></script>

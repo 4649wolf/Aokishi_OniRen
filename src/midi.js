@@ -1,4 +1,9 @@
 // Standard MIDI File reader: variable-length deltas, running status and tempo map.
+export function transposeSong(song,semitones){
+ if(!Number.isInteger(semitones)||Math.abs(semitones)>12)throw Error('ノートの高さは-12〜+12半音です');
+ return {...song,notes:song.notes.map(note=>({...note,midi:note.midi+semitones}))};
+}
+
 export function parseMidi(input) {
  const bytes=input instanceof Uint8Array?input:new Uint8Array(input);
  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);

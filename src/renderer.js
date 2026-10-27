@@ -53,7 +53,7 @@ export function drawNotes(canvas,song,time,judge,pitch){
  }
  for(const miss of traces)line(miss.start,miss.end,{midi:miss.midi},'#ff4f59',0);
  if(time>=0){const cursor=px(time);ctx.shadowColor='#66a4ff';ctx.shadowBlur=14;ctx.strokeStyle='#89b9ff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(cursor,y-2);ctx.lineTo(cursor,y+h);ctx.stroke();ctx.shadowBlur=0;
-  if(Number.isFinite(pitch)){const n=song.notes[judge?.index];ctx.fillStyle=n&&Math.abs(pitch-n.midi)>JUDGEMENT.toleranceCents/100?'#ff565e':'#ffe600';ctx.beginPath();ctx.arc(cursor,Math.max(y+7,Math.min(y+h-7,py(pitch))),7,0,Math.PI*2);ctx.fill();}
+  if(Number.isFinite(pitch)){const n=song.notes[judge?.index];ctx.fillStyle=judge?.result==='fail'&&judge?.misses.length?'#ff565e':n&&Math.abs(pitch-n.midi)<=JUDGEMENT.toleranceCents/100?'#ffe600':'#89b9ff';ctx.beginPath();ctx.arc(cursor,Math.max(y+7,Math.min(y+h-7,py(pitch))),7,0,Math.PI*2);ctx.fill();}
  }
  ctx.font='15px sans-serif';ctx.fillStyle='#8291ab';ctx.textAlign='right';ctx.fillText(`${page+1} / 4`,x+w,y+h+9);
  if(time<0)drawCountdown(ctx);

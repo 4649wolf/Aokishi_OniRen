@@ -1,16 +1,17 @@
-import {parseMidi} from './midi.js';
-import {detectPitch,Judge} from './pitch.js';
+import {parseMidi,transposeSong} from './midi.js';
+import {detectPitch,midiName,Judge} from './pitch.js';
 import {createCompositor,drawNotes} from './renderer.js';
 
 const $=id=>document.getElementById(id);
 const video=$('performance'),camera=$('camera'),practice=$('practice');
-let song,compositor,cameraCompositor,micStream,cameraStream,audioContext,analyser,micSource;
+let song,baseSong,compositor,cameraCompositor,micStream,cameraStream,audioContext,analyser,micSource,micGain;
+let noteShift=0,testing=false,inputGain=1,toneContext=null,tone=null,toneRun=0;
 const cameraOptions={key:'off',strength:50,brightness:.68};
 const offset=5,latency=.120;
 let frameBuffer=new Float32Array(4096),judge,playing=false,busy=false,run=0;
 let latestPitch=null,lastFrame=0,lastVideo=-1,frame=0,listenCount=0,stopping=false,starting=false,lastMediaTime=0,lastProgress=0,lastCameraFrame=0;
 const active=()=>micStream?.getAudioTracks().some(t=>t.readyState==='live');
-const message=(text,error=false)=>{$('device-message').textContent=text;$('device-message').classList.toggle('error',error);};
+const message=(text,error=false)=>{$('device-message').textContent=text;$('device-message').hidden=!text;$('device-message').classList.toggle('error',error);};
 const phase=text=>{$('phase').textContent=text;};
 const mediaError=(error,kind)=>{
  if(error.name==='NotAllowedError'||error.name==='SecurityError')return `${kind}が許可されていません。ブラウザーのサイト設定で許可してから、もう一度接続してください。`;
@@ -28,6 +29,35 @@ function refreshControls(){
  practice.controls=!playing;$('loop').disabled=playing;
  $('camera-device').disabled=playing||busy||starting;$('camera-refresh').disabled=playing||busy||starting;
  $('camera-key').disabled=busy;$('camera-strength').disabled=busy||cameraOptions.key==='off';
+ $('mic-state').hidden=!active();
+ $('pitch-test').disabled=playing||busy||starting||!song;$('test-tone').disabled=playing||busy||starting||!song;
+ $('key-down').disabled=playing||starting||!song||noteShift<=-12;$('key-up').disabled=playing||starting||!song||noteShift>=12;$('key-reset').disabled=playing||starting||!song||noteShift===0;
+ $('mic-gain').disabled=playing||busy||starting;
+ $('pitch-test').textContent=testing?'テストをやめる':'音程テスト';$('pitch-test').setAttribute('aria-pressed',String(testing));$('pitch-probe').hidden=!testing;
+}
+function stopTone(){toneRun++;if(tone){try{tone.stop();}catch{}tone.disconnect();tone=null;}}
+function setShift(value){
+ if(playing||starting||!baseSong)return;noteShift=Math.max(-12,Math.min(12,Math.trunc(value)));song=transposeSong(baseSong,noteShift);
+ stopTone();judge=null;$('result').hidden=true;video.currentTime=0;lastVideo=-1;
+ $('key-value').textContent=noteShift>0?`+${noteShift}`:String(noteShift);$('test-target').textContent=midiName(song.notes[0].midi);
+ drawNotes($('notes'),song,-1,null,null);refreshControls();
+}
+async function togglePitchTest(){
+ if(playing||busy||starting)return;
+ if(testing){testing=false;stopTone();refreshControls();return;}
+ practice.pause();if(!active())await connectMic();if(!active())return;
+ testing=true;$('test-reading').textContent='—';refreshControls();
+}
+async function playTestTone(){
+ if(playing||!song)return;
+ try{
+  stopTone();const token=toneRun,context=audioContext||(toneContext??=new (window.AudioContext||window.webkitAudioContext)());await context.resume();
+  if(playing||token!==toneRun)return;
+  const oscillator=context.createOscillator(),gain=context.createGain(),now=context.currentTime;
+  oscillator.frequency.value=440*2**((song.notes[0].midi-69)/12);gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(.12,now+.02);gain.gain.setValueAtTime(.12,now+.5);gain.gain.linearRampToValueAtTime(0,now+.6);
+  oscillator.connect(gain);gain.connect(context.destination);tone=oscillator;oscillator.start();oscillator.stop(now+.62);
+  oscillator.addEventListener('ended',()=>{oscillator.disconnect();gain.disconnect();if(tone===oscillator)tone=null;});
+ }catch{message('基準音を再生できませんでした。',true);}
 }
 async function connectMic(){
  if(busy||playing)return;const token=run;busy=true;refreshControls();message('マイクの許可を待っています…');
@@ -38,11 +68,11 @@ async function connectMic(){
   if(token!==run){stream.getTracks().forEach(t=>t.stop());return;}
   context=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});await context.resume();
   if(token!==run){stream.getTracks().forEach(t=>t.stop());await context.close();return;}
-  const source=context.createMediaStreamSource(stream),node=context.createAnalyser();node.fftSize=4096;node.smoothingTimeConstant=0;source.connect(node);
-  micStream=stream;audioContext=context;micSource=source;analyser=node;
+  const source=context.createMediaStreamSource(stream),gain=context.createGain(),node=context.createAnalyser();node.fftSize=4096;node.smoothingTimeConstant=0;gain.gain.value=inputGain;source.connect(gain);gain.connect(node);
+  micStream=stream;audioContext=context;micSource=source;micGain=gain;analyser=node;
   stream.getAudioTracks()[0].addEventListener('ended',()=>{if(stopping)return;if(playing)finish('interrupted','マイクの接続が切れました。つなぎ直して挑戦してください。');releaseMic();refreshControls();});
   context.addEventListener('statechange',()=>{if(playing&&context.state!=='running')finish('interrupted','音声処理が停止しました。マイクを接続し直してください。');});
-  message('接続できました。挑戦をはじめられます。');phase('準備OK — いつでも挑戦できます');
+  message('');phase('');
  }catch(error){stream?.getTracks().forEach(t=>t.stop());if(context&&context.state!=='closed')await context.close();message(mediaError(error,'マイク'),true);}
  finally{busy=false;refreshControls();}
 }
@@ -68,20 +98,22 @@ async function connectCamera({replace=false}={}){
   if(token!==run){stream.getTracks().forEach(t=>t.stop());camera.srcObject=null;return;}
   const layer=$('camera-layer'),width=camera.videoWidth||1280,height=camera.videoHeight||720;
   layer.width=cameraCompositor.kind==='webgl'?width:Math.min(960,width);layer.height=Math.round(layer.width*height/width);
-  cameraCompositor.draw();cameraStream=stream;layer.hidden=false;$('camera-placeholder').hidden=true;
+  cameraCompositor.draw();cameraStream=stream;layer.hidden=false;
   stream.getVideoTracks()[0].addEventListener('ended',()=>{releaseCamera();refreshControls();message('カメラが切断されました。カメラなしでも挑戦できます。');});
   message('カメラを接続しました。映像はこの端末だけに表示します。');
   await refreshCameraDevices();
- }catch(error){stream?.getTracks().forEach(t=>t.stop());cameraStream=null;camera.srcObject=null;$('camera-layer').hidden=true;$('camera-placeholder').hidden=false;message(mediaError(error,'カメラ'),true);}
+ }catch(error){stream?.getTracks().forEach(t=>t.stop());cameraStream=null;camera.srcObject=null;$('camera-layer').hidden=true;message(mediaError(error,'カメラ'),true);}
  finally{busy=false;refreshControls();}
 }
 function releaseMic(){
+ testing=false;stopTone();
  const old=micStream;micStream=null;old?.getTracks().forEach(t=>t.stop());micSource?.disconnect();micSource=null;analyser=null;
+ micGain?.disconnect();micGain=null;
  const oldContext=audioContext;audioContext=null;if(oldContext&&oldContext.state!=='closed')oldContext.close().catch(()=>{});
- latestPitch=null;$('live-status').textContent='マイク接続前';$('live-dot').className='dot';
+ latestPitch=null;$('live-status').textContent='';$('live-dot').className='dot';$('mic-state').hidden=true;
 }
-function releaseCamera(){const old=cameraStream;cameraStream=null;old?.getTracks().forEach(t=>t.stop());camera.srcObject=null;$('camera-layer').hidden=true;$('camera-placeholder').hidden=false;}
-function releaseAll(){run++;starting=false;stopping=true;if(playing)finish('interrupted','接続を解除しました。');releaseMic();releaseCamera();stopping=false;refreshControls();message('接続を解除しました。');}
+function releaseCamera(){const old=cameraStream;cameraStream=null;old?.getTracks().forEach(t=>t.stop());camera.srcObject=null;$('camera-layer').hidden=true;}
+function releaseAll(){run++;starting=false;stopping=true;if(playing)finish('interrupted','接続を解除しました。');releaseMic();releaseCamera();if(toneContext){const old=toneContext;toneContext=null;if(old.state!=='closed')old.close().catch(()=>{});}stopping=false;refreshControls();message('');}
 async function start(){
  if(playing||busy||starting||!song||!active())return;
  const token=++run;starting=true;refreshControls();
@@ -89,7 +121,7 @@ async function start(){
   if(audioContext.state!=='running')await audioContext.resume();
   if(token!==run||!active())return;
   if(audioContext?.state!=='running')throw Error('音声処理を開始できません。マイクを接続し直してください。');
-  practice.pause();practice.currentTime=0;video.pause();video.currentTime=0;video.playbackRate=1;
+  testing=false;stopTone();practice.pause();practice.currentTime=0;video.pause();video.currentTime=0;video.playbackRate=1;
   judge=new Judge(song.notes);latestPitch=null;$('result').hidden=true;
   playing=true;lastFrame=performance.now();lastProgress=lastFrame;lastMediaTime=0;lastVideo=-1;phase('カウントダウン — 太鼓の「1」が消えたら歌い出し');refreshControls();
   await video.play();
@@ -99,7 +131,7 @@ async function start(){
 function finish(kind,detail=''){
  if(!playing)return;run++;starting=false;playing=false;video.pause();
  const index=Math.max(0,judge?.index??0),note=song.notes[index];
- if(kind==='fail')detail=detail||`${Math.max(0,video.currentTime-offset).toFixed(2)}秒付近で音程が外れました。お手本を聴いて、もう一度。`;
+ if(kind==='fail')detail=detail||(judge?.misses.length?`${Math.max(0,video.currentTime-offset).toFixed(2)}秒付近で音程が外れました。`:'歌声の音程を検出できませんでした。音程テストで入力を確認してください。');
  if(kind==='clear')detail='40音、最後まで歌い切りました！';
  if(kind==='interrupted')detail=detail||'再生や判定が途切れました。準備を確認して、最初から挑戦してください。';
  $('result').dataset.kind=kind;$('result-title').textContent={fail:'失敗',clear:'クリア',interrupted:'中断'}[kind];
@@ -109,7 +141,7 @@ function finish(kind,detail=''){
 }
 function reset(){
  if(playing)return;$('result').hidden=true;video.currentTime=0;judge=null;latestPitch=null;lastVideo=-1;
- phase(active()?'準備OK — いつでも挑戦できます':'マイクを接続して挑戦しよう');drawNotes($('notes'),song,-1,null,null);refreshControls();
+ phase('');drawNotes($('notes'),song,-1,null,null);refreshControls();
 }
 function tick(now){
  frame=requestAnimationFrame(tick);
@@ -123,6 +155,7 @@ function tick(now){
    analyser.getFloatTimeDomainData(frameBuffer);latestPitch=detectPitch(frameBuffer,audioContext.sampleRate);
    $('live-dot').className=latestPitch?'dot ready':'dot';
    $('live-status').textContent=latestPitch?'声を検出中':'声を待っています';
+   if(testing){let energy=0;for(const value of frameBuffer)energy+=value*value;const rms=Math.sqrt(energy/frameBuffer.length);$('test-level').value=Math.min(.2,rms);$('test-reading').textContent=latestPitch?`${midiName(latestPitch.midi)} · ${latestPitch.frequency.toFixed(1)} Hz`:rms>=.012?'入力あり・音程未検出':rms>=.002?'入力が小さい':'入力なし';}
   }
   if(playing){
    if(now-lastFrame>220){finish('interrupted','処理が途切れたため中断しました。他のアプリを閉じて再挑戦してください。');return;}
@@ -142,13 +175,16 @@ function tick(now){
 const clock=seconds=>`00:${Math.min(99,Math.floor(seconds||0)).toString().padStart(2,'0')}`;
 
 $('mic-button').addEventListener('click',connectMic);$('camera-button').addEventListener('click',connectCamera);$('release').addEventListener('click',releaseAll);
+$('key-down').addEventListener('click',()=>setShift(noteShift-1));$('key-up').addEventListener('click',()=>setShift(noteShift+1));$('key-reset').addEventListener('click',()=>setShift(0));
+$('pitch-test').addEventListener('click',togglePitchTest);$('test-tone').addEventListener('click',playTestTone);
+$('mic-gain').addEventListener('input',()=>{inputGain=Number($('mic-gain').value);if(micGain)micGain.gain.value=inputGain;$('gain-value').textContent=`${inputGain}×`;});
 $('camera-device').addEventListener('change',()=>{if(cameraStream)connectCamera({replace:true});});
 $('camera-refresh').addEventListener('click',refreshCameraDevices);
 $('camera-key').addEventListener('change',()=>{cameraOptions.key=$('camera-key').value;refreshControls();});
 $('camera-strength').addEventListener('input',()=>{cameraOptions.strength=Number($('camera-strength').value);});
 $('start').addEventListener('click',start);$('retry').addEventListener('click',start);$('back').addEventListener('click',reset);$('stop').addEventListener('click',()=>finish('interrupted','チャレンジを中断しました。いつでも最初から挑戦できます。'));
 $('loop').addEventListener('change',()=>{practice.loop=$('loop').checked;});
-practice.addEventListener('play',()=>{if(playing){practice.pause();return;}listenCount++;$('listen-count').textContent=`試聴 ${listenCount}回目`;});
+practice.addEventListener('play',()=>{if(playing){practice.pause();return;}testing=false;stopTone();refreshControls();listenCount++;$('listen-count').textContent=`試聴 ${listenCount}回目`;});
 $('fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if($('stage').requestFullscreen)await $('stage').requestFullscreen();else message('このブラウザーでは全画面表示を利用できません。端末を横向きにしてお使いください。');}catch{message('全画面表示を開始できませんでした。');}});
 video.addEventListener('error',()=>{if(playing)finish('interrupted','動画を読み込めませんでした。接続を確認してください。');message('動画を読み込めません。ページを再読み込みしてください。',true);});
 video.addEventListener('ended',()=>{if(!playing)return;judge.update(video.currentTime-offset-latency,latestPitch?.midi??null);finish(judge.result||'interrupted');});
@@ -160,14 +196,14 @@ window.addEventListener('pageshow',event=>{if(event.persisted){frame=requestAnim
 
 async function init(){
  try{
-  const response=await fetch(new URL('../assets/song.mid',import.meta.url));if(!response.ok)throw Error('MIDIを読み込めませんでした。');song=parseMidi(await response.arrayBuffer());
+  const response=await fetch(new URL('../assets/song.mid',import.meta.url));if(!response.ok)throw Error('MIDIを読み込めませんでした。');baseSong=parseMidi(await response.arrayBuffer());song=transposeSong(baseSong,noteShift);
   if(song.notes.length!==40)throw Error('課題曲のMIDIが一致しません。');
   compositor=createCompositor($('composite'),video);
   cameraCompositor=createCompositor($('camera-layer'),camera,cameraOptions);
   refreshCameraDevices();
   const show=()=>{try{compositor.draw();drawNotes($('notes'),song,-1,null,null);}catch(error){message(error.message,true);}};
   video.addEventListener('loadeddata',show);video.addEventListener('seeked',show);show();
-  phase('マイクを接続して挑戦しよう');refreshControls();frame=requestAnimationFrame(tick);
+  phase('');refreshControls();frame=requestAnimationFrame(tick);
  }catch(error){phase('素材の読み込みに失敗しました');message(`${error.message} ページを再読み込みしてください。`,true);}
 }
 init();
