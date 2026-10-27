@@ -23,7 +23,7 @@ function harness({firstPlay,resume}={}){
   });
   return elements.get(id);
  };
- const context={state:resume?'suspended':'running',resume(){resumeCalls++;return resume.promise.then(()=>{this.state='running';});}};
+ const context={state:resume?'suspended':'running',resume(){resumeCalls++;return resume.promise.then(()=>{this.state='running';});},close(){this.state='closed';return Promise.resolve();}};
  const sandbox=vm.createContext({
   document:{getElementById:element,addEventListener(){}},window:{addEventListener(){}},
   performance:{now:()=>now},requestAnimationFrame:()=>1,cancelAnimationFrame(){},
@@ -31,7 +31,7 @@ function harness({firstPlay,resume}={}){
   testSong:song,testContext:context
  });
  vm.runInContext(appSource,sandbox);
- vm.runInContext("song=testSong;compositor={draw(){}};micStream={getAudioTracks:()=>[{readyState:'live'}]};audioContext=testContext;",sandbox);
+ vm.runInContext("song=testSong;compositor={draw(){}};micStream={getAudioTracks:()=>[{readyState:'live'}],getTracks:()=>[{stop(){}}]};audioContext=testContext;",sandbox);
  return {
   call:code=>vm.runInContext(code,sandbox),
   video:element('performance'),result:element('result'),
@@ -67,4 +67,12 @@ test('a video that stops advancing is interrupted even while animation frames co
  for(let i=0;i<55;i++)h.tick(50);
  assert.equal(h.call('playing'),false,'a stalled video must leave the active challenge');
  assert.equal(h.result.dataset.kind,'interrupted');
+});
+
+test('leaving during audio resume does not keep controls locked on return',async()=>{
+ const pending=deferred(),h=harness({resume:pending});
+ const oldStart=h.call('start()');h.call('releaseAll()');
+ pending.resolve();await oldStart;
+ assert.equal(h.call('starting'),false,'page return must allow connecting devices again');
+ assert.equal(h.call('playing'),false);
 });

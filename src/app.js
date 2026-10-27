@@ -50,7 +50,9 @@ async function connectCamera(){
  try{
   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}},audio:false});
   if(token!==run){stream.getTracks().forEach(t=>t.stop());return;}
-  camera.srcObject=stream;await camera.play();cameraStream=stream;$('camera-placeholder').hidden=true;
+  camera.srcObject=stream;await camera.play();
+  if(token!==run){stream.getTracks().forEach(t=>t.stop());camera.srcObject=null;return;}
+  cameraStream=stream;$('camera-placeholder').hidden=true;
   stream.getVideoTracks()[0].addEventListener('ended',()=>{releaseCamera();refreshControls();message('カメラが切断されました。カメラなしでも挑戦できます。');});
   message('カメラを接続しました。映像はこの端末だけに表示します。');
  }catch(error){stream?.getTracks().forEach(t=>t.stop());camera.srcObject=null;message(mediaError(error,'カメラ'),true);}
@@ -62,7 +64,7 @@ function releaseMic(){
  latestPitch=null;$('your-note').textContent='—';$('live-status').textContent='マイク接続前';$('live-dot').className='dot';
 }
 function releaseCamera(){const old=cameraStream;cameraStream=null;old?.getTracks().forEach(t=>t.stop());camera.srcObject=null;$('camera-placeholder').hidden=false;}
-function releaseAll(){run++;stopping=true;if(playing)finish('interrupted','接続を解除しました。');releaseMic();releaseCamera();stopping=false;refreshControls();message('接続を解除しました。');}
+function releaseAll(){run++;starting=false;stopping=true;if(playing)finish('interrupted','接続を解除しました。');releaseMic();releaseCamera();stopping=false;refreshControls();message('接続を解除しました。');}
 function settings(){
  const a=Number($('offset').value),b=Number($('latency').value);
  if(!Number.isFinite(a)||!Number.isFinite(b)||a<4.7||a>5.1||b<0||b>200)throw Error('歌い出しは4.7〜5.1秒、遅延補正は0〜200msで設定してください。');
