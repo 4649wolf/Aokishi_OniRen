@@ -23,11 +23,11 @@ test('correct complete melody clears; octave error fails',()=>{
  const s=song(), j=new Judge(s.notes);
  for(let t=0;t<s.duration+.03;t+=.01){ const n=s.notes.find(n=>t>=n.start&&t<n.end); j.update(t,n?.midi??null); }
  assert.equal(j.result,'clear');
- const bad=new Judge(s.notes); for(let t=0;t<1.2;t+=.01) bad.update(t,72);
+ const bad=new Judge(s.notes); for(let t=0;t<3;t+=.01) bad.update(t,72);
  assert.equal(bad.result,'fail');
 });
 test('silence and repeated short wrong notes fail, boundaries do not reset mistakes',()=>{
- for(const value of [null,48]){const j=new Judge(song().notes);for(let t=0;t<1;t+=.01)j.update(t,value);assert.equal(j.result,'fail');}
+ for(const value of [null,48]){const j=new Judge(song().notes);for(let t=0;t<4;t+=.01)j.update(t,value);assert.equal(j.result,'fail');}
 });
 test('brief pitch deviation recovers; failed bar is recorded red',()=>{
  const j=new Judge(song().notes); for(let t=0;t<.3;t+=.01)j.update(t,t<.16?60:65);
@@ -37,15 +37,48 @@ test('skipping time cannot produce clear; missing notes cannot produce clear',()
  const j=new Judge(song().notes); j.update(0,60); j.update(10.5,77);assert.equal(j.result,'interrupted');
  const k=new Judge(song().notes);k.update(11,null);assert.equal(k.result,'interrupted');
 });
-test('relaxed 150 cents inclusive, more than 150 rejected',()=>{
- for(const [offset,expected] of [[1.5,null],[1.51,'fail']]){const j=new Judge([{start:0,end:1,midi:60}]);for(let t=0;t<.7;t+=.01)j.update(t,60+offset);assert.equal(j.result,expected);}
+test('relaxed 200 cents inclusive, more than 200 rejected',()=>{
+ for(const [offset,expected] of [[2,null],[2.01,'fail']]){const j=new Judge([{start:0,end:2,midi:60}]);for(let t=0;t<1.4;t+=.01)j.update(t,60+offset);assert.equal(j.result,expected);}
 });
 
-test('short misses are forgiven, but a sustained 500ms error still fails',()=>{
+test('short misses are forgiven, but a sustained 1 second error still fails',()=>{
  const j=new Judge([{start:0,end:2,midi:60}]);
- for(let t=0;t<.4;t+=.01)j.update(t,66);
+ for(let t=0;t<.85;t+=.01)j.update(t,66);
  assert.equal(j.result,null);
- for(let t=.4;t<.8;t+=.01)j.update(t,66);
+ for(let t=.85;t<1.4;t+=.01)j.update(t,66);
+ assert.equal(j.result,'fail');
+});
+
+test('missed segments carry the actual sung pitch, including changes in pitch',()=>{
+ const j=new Judge([{start:0,end:2,midi:60}]);
+ for(let t=0;t<.35;t+=.01)j.update(t,67);
+ for(let t=.35;t<.65;t+=.01)j.update(t,55);
+ assert.ok(j.misses.some(m=>m.midi===67));assert.ok(j.misses.some(m=>m.midi===55));
+ assert.ok(j.misses.every(m=>m.midi!==60));
+});
+
+test('a brief breath is tolerated and silence never creates a fake red pitch bar',()=>{
+ const j=new Judge([{start:0,end:3,midi:60}]);
+ for(let t=0;t<1.2;t+=.01)j.update(t,null);
+ assert.equal(j.result,null);assert.equal(j.misses.length,0);
+ for(let t=1.2;t<1.8;t+=.01)j.update(t,null);
+ assert.equal(j.result,'fail');
+});
+
+test('returning from a tolerated breath does not instantly fail on one wrong pitch',()=>{
+ const j=new Judge([{start:0,end:4,midi:60}]);
+ for(let t=0;t<1.2;t+=.01)j.update(t,null);
+ for(let t=1.2;t<1.4;t+=.01)j.update(t,65);
+ assert.equal(j.result,null);
+ for(let t=1.4;t<2.4;t+=.01)j.update(t,null);
+ assert.equal(j.result,null);
+ for(let t=2.4;t<3.6;t+=.01)j.update(t,65);
+ assert.equal(j.result,'fail');
+});
+
+test('brief unvoiced detection gaps do not erase a sustained wrong melody',()=>{
+ const j=new Judge([{start:0,end:3,midi:60}]);
+ for(let i=0;i<200;i++)j.update(i/100,i%15===0?null:65);
  assert.equal(j.result,'fail');
 });
 

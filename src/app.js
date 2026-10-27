@@ -4,10 +4,11 @@ import {createCompositor,drawNotes} from './renderer.js';
 
 const $=id=>document.getElementById(id);
 const video=$('performance'),camera=$('camera'),practice=$('practice');
-let song,compositor,micStream,cameraStream,audioContext,analyser,micSource;
+let song,compositor,cameraCompositor,micStream,cameraStream,audioContext,analyser,micSource;
+const cameraOptions={key:'off',strength:50,brightness:.68};
 const offset=5,latency=.120;
 let frameBuffer=new Float32Array(4096),judge,playing=false,busy=false,run=0;
-let latestPitch=null,lastFrame=0,lastVideo=-1,frame=0,listenCount=0,stopping=false,starting=false,lastMediaTime=0,lastProgress=0;
+let latestPitch=null,lastFrame=0,lastVideo=-1,frame=0,listenCount=0,stopping=false,starting=false,lastMediaTime=0,lastProgress=0,lastCameraFrame=0;
 const active=()=>micStream?.getAudioTracks().some(t=>t.readyState==='live');
 const message=(text,error=false)=>{$('device-message').textContent=text;$('device-message').classList.toggle('error',error);};
 const phase=text=>{$('phase').textContent=text;};
@@ -25,6 +26,8 @@ function refreshControls(){
  $('camera-button').classList.toggle('connected',!!cameraStream);$('camera-button').textContent=cameraStream?'カメラをオフ':'カメラを接続（任意）';
  $('release').hidden=!(micStream||cameraStream);$('release').disabled=playing||busy||starting;$('stop').hidden=!playing;
  practice.controls=!playing;$('loop').disabled=playing;
+ $('camera-device').disabled=playing||busy||starting;$('camera-refresh').disabled=playing||busy||starting;
+ $('camera-key').disabled=busy;$('camera-strength').disabled=busy||cameraOptions.key==='off';
 }
 async function connectMic(){
  if(busy||playing)return;const token=run;busy=true;refreshControls();message('マイクの許可を待っています…');
@@ -43,19 +46,33 @@ async function connectMic(){
  }catch(error){stream?.getTracks().forEach(t=>t.stop());if(context&&context.state!=='closed')await context.close();message(mediaError(error,'マイク'),true);}
  finally{busy=false;refreshControls();}
 }
-async function connectCamera(){
+async function refreshCameraDevices(){
+ if(!navigator.mediaDevices?.enumerateDevices)return;
+ try{
+  const devices=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+  const select=$('camera-device'),selected=select.value;
+  select.replaceChildren();const standard=document.createElement('option');standard.value='';standard.textContent='標準のカメラ';select.append(standard);
+  devices.forEach((device,index)=>{const option=document.createElement('option');option.value=device.deviceId;option.textContent=device.label||`カメラ ${index+1}`;select.append(option);});
+  if(devices.some(d=>d.deviceId===selected))select.value=selected;
+ }catch{ /* The browser may hide device names until camera permission is granted. */ }
+}
+async function connectCamera({replace=false}={}){
  if(busy||playing)return;
- if(cameraStream){releaseCamera();refreshControls();return;}
+ if(cameraStream){releaseCamera();if(!replace){refreshControls();return;}}
  const token=run;busy=true;refreshControls();message('カメラの許可を待っています…');let stream;
  try{
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}},audio:false});
+  const device=$('camera-device').value;
+  stream=await navigator.mediaDevices.getUserMedia({video:{...(device?{deviceId:{exact:device}}:{facingMode:'user'}),width:{ideal:1280},height:{ideal:720}},audio:false});
   if(token!==run){stream.getTracks().forEach(t=>t.stop());return;}
   camera.srcObject=stream;await camera.play();
   if(token!==run){stream.getTracks().forEach(t=>t.stop());camera.srcObject=null;return;}
-  cameraStream=stream;$('camera-placeholder').hidden=true;
+  const layer=$('camera-layer'),width=camera.videoWidth||1280,height=camera.videoHeight||720;
+  layer.width=cameraCompositor.kind==='webgl'?width:Math.min(960,width);layer.height=Math.round(layer.width*height/width);
+  cameraCompositor.draw();cameraStream=stream;layer.hidden=false;$('camera-placeholder').hidden=true;
   stream.getVideoTracks()[0].addEventListener('ended',()=>{releaseCamera();refreshControls();message('カメラが切断されました。カメラなしでも挑戦できます。');});
   message('カメラを接続しました。映像はこの端末だけに表示します。');
- }catch(error){stream?.getTracks().forEach(t=>t.stop());camera.srcObject=null;message(mediaError(error,'カメラ'),true);}
+  await refreshCameraDevices();
+ }catch(error){stream?.getTracks().forEach(t=>t.stop());cameraStream=null;camera.srcObject=null;$('camera-layer').hidden=true;$('camera-placeholder').hidden=false;message(mediaError(error,'カメラ'),true);}
  finally{busy=false;refreshControls();}
 }
 function releaseMic(){
@@ -63,7 +80,7 @@ function releaseMic(){
  const oldContext=audioContext;audioContext=null;if(oldContext&&oldContext.state!=='closed')oldContext.close().catch(()=>{});
  latestPitch=null;$('live-status').textContent='マイク接続前';$('live-dot').className='dot';
 }
-function releaseCamera(){const old=cameraStream;cameraStream=null;old?.getTracks().forEach(t=>t.stop());camera.srcObject=null;$('camera-placeholder').hidden=false;}
+function releaseCamera(){const old=cameraStream;cameraStream=null;old?.getTracks().forEach(t=>t.stop());camera.srcObject=null;$('camera-layer').hidden=true;$('camera-placeholder').hidden=false;}
 function releaseAll(){run++;starting=false;stopping=true;if(playing)finish('interrupted','接続を解除しました。');releaseMic();releaseCamera();stopping=false;refreshControls();message('接続を解除しました。');}
 async function start(){
  if(playing||busy||starting||!song||!active())return;
@@ -99,6 +116,9 @@ function tick(now){
  if(!song||!compositor)return;
  try{
   if(video.readyState>=2&&lastVideo!==video.currentTime){compositor.draw();lastVideo=video.currentTime;}
+  if(cameraStream&&cameraCompositor&&now-lastCameraFrame>=33){
+   try{cameraCompositor.draw();lastCameraFrame=now;}catch{releaseCamera();refreshControls();message('カメラ映像の処理が停止しました。カメラを接続し直してください。',true);}
+  }
   if(analyser&&audioContext?.state==='running'){
    analyser.getFloatTimeDomainData(frameBuffer);latestPitch=detectPitch(frameBuffer,audioContext.sampleRate);
    $('live-dot').className=latestPitch?'dot ready':'dot';
@@ -122,6 +142,10 @@ function tick(now){
 const clock=seconds=>`00:${Math.min(99,Math.floor(seconds||0)).toString().padStart(2,'0')}`;
 
 $('mic-button').addEventListener('click',connectMic);$('camera-button').addEventListener('click',connectCamera);$('release').addEventListener('click',releaseAll);
+$('camera-device').addEventListener('change',()=>{if(cameraStream)connectCamera({replace:true});});
+$('camera-refresh').addEventListener('click',refreshCameraDevices);
+$('camera-key').addEventListener('change',()=>{cameraOptions.key=$('camera-key').value;refreshControls();});
+$('camera-strength').addEventListener('input',()=>{cameraOptions.strength=Number($('camera-strength').value);});
 $('start').addEventListener('click',start);$('retry').addEventListener('click',start);$('back').addEventListener('click',reset);$('stop').addEventListener('click',()=>finish('interrupted','チャレンジを中断しました。いつでも最初から挑戦できます。'));
 $('loop').addEventListener('change',()=>{practice.loop=$('loop').checked;});
 practice.addEventListener('play',()=>{if(playing){practice.pause();return;}listenCount++;$('listen-count').textContent=`試聴 ${listenCount}回目`;});
@@ -139,6 +163,8 @@ async function init(){
   const response=await fetch(new URL('../assets/song.mid',import.meta.url));if(!response.ok)throw Error('MIDIを読み込めませんでした。');song=parseMidi(await response.arrayBuffer());
   if(song.notes.length!==40)throw Error('課題曲のMIDIが一致しません。');
   compositor=createCompositor($('composite'),video);
+  cameraCompositor=createCompositor($('camera-layer'),camera,cameraOptions);
+  refreshCameraDevices();
   const show=()=>{try{compositor.draw();drawNotes($('notes'),song,-1,null,null);}catch(error){message(error.message,true);}};
   video.addEventListener('loadeddata',show);video.addEventListener('seeked',show);show();
   phase('マイクを接続して挑戦しよう');refreshControls();frame=requestAnimationFrame(tick);

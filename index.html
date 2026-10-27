@@ -14,7 +14,8 @@
   <div class="stage-top"><span id="phase" role="status">素材を読み込み中…</span><button id="fullscreen" class="text-button" type="button" aria-label="ステージを全画面表示">↗ 全画面</button></div>
   <section id="stage" class="stage" aria-label="カラオケステージ">
    <img class="backdrop" src="./assets/background.png" alt="">
-   <video id="camera" class="camera" autoplay muted playsinline aria-label="自分のカメラ映像"></video>
+   <video id="camera" class="source-video" autoplay muted playsinline aria-hidden="true"></video>
+   <canvas id="camera-layer" class="camera-layer" width="1280" height="720" hidden aria-label="クロマキー処理したカメラ・VTuberの映像"></canvas>
    <div id="camera-placeholder" class="camera-placeholder"><span class="camera-symbol">◎</span><p>あなたのステージ</p><small>カメラをつなぐと、ここに映ります</small></div>
    <video id="performance" class="source-video" preload="auto" playsinline disablepictureinpicture tabindex="-1" aria-hidden="true"><source src="./assets/performance.mp4" type="video/mp4"></video>
    <canvas id="composite" width="1920" height="1080" aria-label="背景を透過した課題曲の映像"></canvas>
@@ -34,6 +35,11 @@
    <section class="panel challenge-panel" aria-labelledby="challenge-title">
     <div class="panel-heading"><span class="step">02</span><h2 id="challenge-title">曲に挑戦する</h2></div>
     <div class="device-buttons"><button id="mic-button" class="secondary" type="button">マイクを接続</button><button id="camera-button" class="secondary" type="button">カメラを接続 <span>任意</span></button><button id="release" class="text-button" type="button" hidden>接続を解除</button></div>
+    <details class="camera-settings"><summary>カメラ・クロマキー</summary><div class="camera-fields">
+     <div class="camera-source"><label for="camera-device">カメラ</label><select id="camera-device"><option value="">標準のカメラ</option></select><button id="camera-refresh" class="text-button" type="button" aria-label="カメラ一覧を更新">更新</button></div>
+     <div class="camera-key-row"><label for="camera-key">クロマキー</label><select id="camera-key"><option value="off">なし</option><option value="green">緑</option><option value="blue">青</option></select></div>
+     <label class="camera-strength" for="camera-strength">透過の強さ <input id="camera-strength" type="range" min="0" max="100" step="1" value="50" disabled></label>
+    </div></details>
     <div class="start-row"><button id="start" class="primary" type="button" disabled>挑戦をはじめる <span>→</span></button><button id="stop" class="secondary" type="button" hidden>中断する</button></div>
     <p id="device-message" class="device-message" role="status">マイクを接続すると挑戦できます。</p>
    </section>

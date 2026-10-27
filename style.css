@@ -4,3 +4,7 @@
 @media(prefers-reduced-motion:reduce){button{transition:none}}
 
 footer{margin-top:24px}
+.stage>.camera-layer{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;transform:scaleX(-1)}
+.stage:fullscreen>.camera-layer{inset:auto;width:min(100vw,177.777778vh);height:min(100vh,56.25vw);left:50%;top:50%;transform:translate(-50%,-50%) scaleX(-1)}
+.camera-settings{border-top:1px solid #253044;margin:2px 0 14px;color:#b5c5dc;font-size:12px}.camera-settings summary{cursor:pointer;padding:9px 0}.camera-fields{display:grid;gap:10px;padding:3px 0 13px}.camera-source,.camera-key-row{display:flex;align-items:center;gap:10px}.camera-source label,.camera-key-row label{min-width:72px}.camera-fields select{min-width:0;flex:1;background:#0b111c;border:1px solid #40516b;border-radius:4px;padding:7px;color:#e2e9f6;font:inherit}.camera-strength{display:flex;align-items:center;gap:12px}.camera-strength input{flex:1;min-width:0;accent-color:#79abff}.camera-fields select:focus-visible{outline:3px solid #9bc5ff;outline-offset:3px}
+@media(max-width:600px){.camera-source,.camera-key-row{gap:7px}.camera-source label,.camera-key-row label{min-width:65px}.camera-source select{max-width:205px}}
