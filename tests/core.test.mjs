@@ -8,16 +8,16 @@ const song=()=>parseMidi(readFileSync(new URL('../assets/song.mid',import.meta.u
 test('provided MIDI: forty notes, tempo and exact duration',()=>{
  const s=song();assert.equal(s.notes.length,40);assert.equal(s.notes[0].midi,60);assert.equal(s.notes.at(-1).midi,77);assert.ok(Math.abs(s.duration-10.397725)<.00001);assert.ok(Math.abs(s.notes[1].start-.340909)<.00001);
 });
-test('transpose all notes within one octave without changing time or source',()=>{
- const original=song();for(const shift of [-12,-1,0,1,12]){const s=transposeSong(original,shift);assert.equal(s.duration,original.duration);s.notes.forEach((n,i)=>{assert.equal(n.midi,original.notes[i].midi+shift);assert.equal(n.start,original.notes[i].start);assert.equal(n.end,original.notes[i].end);});}
- assert.equal(original.notes[0].midi,60);assert.throws(()=>transposeSong(original,13));assert.throws(()=>transposeSong(original,.5));
+test('transpose -24 to +12 without changing time or source',()=>{
+ const original=song();for(const shift of [-24,-13,-12,-1,0,1,12]){const s=transposeSong(original,shift);assert.equal(s.duration,original.duration);s.notes.forEach((n,i)=>{assert.equal(n.midi,original.notes[i].midi+shift);assert.equal(n.start,original.notes[i].start);assert.equal(n.end,original.notes[i].end);});}
+ assert.equal(original.notes[0].midi,60);assert.throws(()=>transposeSong(original,-25));assert.throws(()=>transposeSong(original,13));assert.throws(()=>transposeSong(original,.5));
 });
 test('YIN covers shifted bass and high notes, harmonics, silence and noise',()=>{
- for(const freq of [65.406,73.416,110,196,261.6256,440,880,1760]){const a=Float32Array.from({length:4096},(_,i)=>.2*Math.sin(2*Math.PI*freq*i/48000)+.1*Math.sin(4*Math.PI*freq*i/48000));const p=detectPitch(a,48000);assert.ok(p,`detect ${freq}`);assert.ok(Math.abs(1200*Math.log2(p.frequency/freq))<15,`accuracy ${freq}`);}
+ for(const rate of [44100,48000])for(const freq of [36.708,65.406,73.416,110,196,261.6256,440,880,1760]){const a=Float32Array.from({length:4096},(_,i)=>.2*Math.sin(2*Math.PI*freq*i/rate)+.1*Math.sin(4*Math.PI*freq*i/rate));const p=detectPitch(a,rate);assert.ok(p,`detect ${freq} at ${rate}`);assert.ok(Math.abs(1200*Math.log2(p.frequency/freq))<15,`accuracy ${freq} at ${rate}`);}
  assert.equal(detectPitch(new Float32Array(4096),48000),null);assert.equal(detectPitch(Float32Array.from({length:4096},(_,i)=>.1*Math.sin(i*i*123.456)),48000),null);assert.equal(frequencyToMidi(440),69);
 });
 test('complete correct melody clears at original and transposed keys',()=>{
- for(const shift of [-12,0,12]){const s=transposeSong(song(),shift),j=new Judge(s.notes);for(let t=0;t<s.duration+.03;t+=.01){const n=s.notes.find(n=>t>=n.start&&t<n.end);j.update(t,n?.midi??null);}assert.equal(j.result,'clear');}
+ for(const shift of [-24,-12,0,12]){const s=transposeSong(song(),shift),j=new Judge(s.notes);for(let t=0;t<s.duration+.03;t+=.01){const n=s.notes.find(n=>t>=n.start&&t<n.end);j.update(t,n?.midi??null);}assert.equal(j.result,'clear');}
 });
 test('the first confirmed red segment and failure occur in the same update',()=>{
  const j=new Judge([{start:0,end:1,midi:60}]);j.update(0,65);j.update(.07,65);j.update(.09,65);assert.equal(j.result,null);assert.equal(j.misses.length,0);j.update(.11,65);assert.equal(j.result,'fail');assert.equal(j.misses.length,1);assert.equal(j.misses[0].midi,65);
