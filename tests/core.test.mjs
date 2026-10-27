@@ -23,7 +23,7 @@ test('correct complete melody clears; octave error fails',()=>{
  const s=song(), j=new Judge(s.notes);
  for(let t=0;t<s.duration+.03;t+=.01){ const n=s.notes.find(n=>t>=n.start&&t<n.end); j.update(t,n?.midi??null); }
  assert.equal(j.result,'clear');
- const bad=new Judge(s.notes); for(let t=0;t<.4;t+=.01) bad.update(t,72);
+ const bad=new Judge(s.notes); for(let t=0;t<1.2;t+=.01) bad.update(t,72);
  assert.equal(bad.result,'fail');
 });
 test('silence and repeated short wrong notes fail, boundaries do not reset mistakes',()=>{
@@ -37,8 +37,26 @@ test('skipping time cannot produce clear; missing notes cannot produce clear',()
  const j=new Judge(song().notes); j.update(0,60); j.update(10.5,77);assert.equal(j.result,'interrupted');
  const k=new Judge(song().notes);k.update(11,null);assert.equal(k.result,'interrupted');
 });
-test('100 cents inclusive, more than 100 rejected',()=>{
- for(const [offset,expected] of [[1,null],[1.01,'fail']]){const j=new Judge([{start:0,end:1,midi:60}]);for(let t=0;t<.6;t+=.01)j.update(t,60+offset);assert.equal(j.result,expected);}
+test('relaxed 150 cents inclusive, more than 150 rejected',()=>{
+ for(const [offset,expected] of [[1.5,null],[1.51,'fail']]){const j=new Judge([{start:0,end:1,midi:60}]);for(let t=0;t<.7;t+=.01)j.update(t,60+offset);assert.equal(j.result,expected);}
+});
+
+test('short misses are forgiven, but a sustained 500ms error still fails',()=>{
+ const j=new Judge([{start:0,end:2,midi:60}]);
+ for(let t=0;t<.4;t+=.01)j.update(t,66);
+ assert.equal(j.result,null);
+ for(let t=.4;t<.8;t+=.01)j.update(t,66);
+ assert.equal(j.result,'fail');
+});
+
+test('correct singing records yellow segments while future notes stay unrecorded',()=>{
+ const j=new Judge([{start:0,end:1,midi:60},{start:1,end:2,midi:62}]);
+ for(let t=0;t<.4;t+=.01)j.update(t,61.3);
+ assert.ok(j.hits.length>0);assert.ok(j.hits.every(h=>h.index===0&&h.end<=.4));
+ assert.equal(j.misses.length,0);
+ for(let t=.4;t<.55;t+=.01)j.update(t,66);
+ assert.ok(j.misses.length>0);assert.ok(j.hits.at(-1).end<=.4);
+ const retry=new Judge(j.notes);assert.equal(retry.hits.length,0);
 });
 test('rests do not count as silence; new attempt has no stale result',()=>{
  const j=new Judge([{start:.5,end:1,midi:60}]);for(let t=0;t<1.05;t+=.01)j.update(t,t<.5?null:60);assert.equal(j.result,'clear');

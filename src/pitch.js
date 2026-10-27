@@ -1,4 +1,5 @@
 export const frequencyToMidi = frequency => 69+12*Math.log2(frequency/440);
+export const JUDGEMENT=Object.freeze({toleranceCents:150,failSeconds:.5});
 export const midiName = midi => {if(!Number.isFinite(midi))return '—';const n=Math.round(midi);return ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'][((n%12)+12)%12]+(Math.floor(n/12)-1);};
 
 // YIN cumulative mean normalized difference. Downsample before the quadratic loop.
@@ -25,7 +26,7 @@ export function detectPitch(buffer,sampleRate){
 }
 
 export class Judge {
- constructor(notes){this.notes=notes;this.result=null;this.misses=[];this.seen=new Set();this.last=null;this.bad=0;this.index=-1;this.good=0;this.scored=0;}
+ constructor(notes){this.notes=notes;this.result=null;this.misses=[];this.hits=[];this.seen=new Set();this.last=null;this.bad=0;this.index=-1;this.good=0;this.scored=0;}
  update(time,midi){
   if(this.result||time<0)return;
   if(!Number.isFinite(time)){this.result='interrupted';return;}
@@ -41,12 +42,13 @@ export class Judge {
   const note=this.notes[index];
   if(time-note.start<.060||note.end-time<.025)return;
   this.seen.add(index);this.scored+=dt;
-  const correct=Number.isFinite(midi)&&Math.abs(midi-note.midi)<=1+1e-8;
+  const correct=Number.isFinite(midi)&&Math.abs(midi-note.midi)<=JUDGEMENT.toleranceCents/100+1e-8;
+  const intervals=correct?this.hits:this.misses;
+  const start=Math.max(note.start,time-dt),previous=intervals.at(-1);
+  if(previous&&previous.index===index&&start-previous.end<.04)previous.end=time;
+  else intervals.push({index,start,end:time});
   if(correct){this.bad=0;this.good+=dt;return;}
   this.bad+=dt;
-  const start=Math.max(note.start,time-dt),previous=this.misses.at(-1);
-  if(previous&&previous.index===index&&start-previous.end<.04)previous.end=time;
-  else this.misses.push({index,start,end:time});
-  if(this.bad>=.250-1e-8)this.result='fail';
+  if(this.bad>=JUDGEMENT.failSeconds-1e-8)this.result='fail';
  }
 }

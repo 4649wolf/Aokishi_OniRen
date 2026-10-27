@@ -1,3 +1,5 @@
+import {JUDGEMENT} from './pitch.js';
+
 export function createCompositor(canvas,video){
  const gl=canvas.getContext('webgl',{alpha:true,premultipliedAlpha:false,preserveDrawingBuffer:true});
  if(!gl) return createCanvasFallback(canvas,video);
@@ -30,12 +32,28 @@ export function drawNotes(canvas,song,time,judge,pitch){
  ctx.fillStyle='#030406';ctx.fillRect(x-6,y-4,w+14,h+16);
  ctx.strokeStyle='#202632';ctx.lineWidth=1;
  for(let midi=Math.ceil((center-range/2)/3)*3;midi<=center+range/2;midi+=3){ctx.beginPath();ctx.moveTo(x,py(midi));ctx.lineTo(x+w,py(midi));ctx.stroke();}
- ctx.lineCap='round';ctx.lineWidth=11;
- const line=(a,b,note,color)=>{if(b<=start||a>=end)return;const left=px(a)+8,right=px(b)-8;ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(left,py(note.midi));ctx.lineTo(Math.max(left+.5,right),py(note.midi));ctx.stroke();};
+ ctx.lineCap='round';ctx.lineWidth=18;
+ const line=(a,b,note,color)=>{if(b<=start||a>=end)return;const left=px(a)+12,right=px(b)-12;ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(left,py(note.midi));ctx.lineTo(Math.max(left+.5,right),py(note.midi));ctx.stroke();};
  song.notes.forEach(n=>line(n.start,n.end,n,'#fff'));
+ for(const hit of judge?.hits??[]){
+  const note=song.notes[hit.index];
+  const a=hit.start-note.start<.1?note.start:hit.start;
+  const b=time>=note.end&&note.end-hit.end<.05?note.end:hit.end;
+  line(a,b,note,'#ffe600');
+ }
  for(const miss of judge?.misses??[])line(miss.start,miss.end,song.notes[miss.index],'#ff4f59');
  if(time>=0){const cursor=px(time);ctx.shadowColor='#66a4ff';ctx.shadowBlur=14;ctx.strokeStyle='#89b9ff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(cursor,y-2);ctx.lineTo(cursor,y+h);ctx.stroke();ctx.shadowBlur=0;
-  if(Number.isFinite(pitch)){const n=song.notes[judge?.index];ctx.fillStyle=n&&Math.abs(pitch-n.midi)>1?'#ff565e':'#88baff';ctx.beginPath();ctx.arc(cursor,Math.max(y+7,Math.min(y+h-7,py(pitch))),7,0,Math.PI*2);ctx.fill();}
+  if(Number.isFinite(pitch)){const n=song.notes[judge?.index];ctx.fillStyle=n&&Math.abs(pitch-n.midi)>JUDGEMENT.toleranceCents/100?'#ff565e':'#ffe600';ctx.beginPath();ctx.arc(cursor,Math.max(y+7,Math.min(y+h-7,py(pitch))),7,0,Math.PI*2);ctx.fill();}
  }
  ctx.font='15px sans-serif';ctx.fillStyle='#8291ab';ctx.textAlign='right';ctx.fillText(`${page+1} / 4`,x+w,y+h+9);
+ if(time<0)drawCountdown(ctx);
+}
+
+function drawCountdown(ctx){
+ ctx.save();ctx.beginPath();
+ const points=[[1626,282],[1832,282],[1886,335],[1846,416],[1762,416],[1744,440],[1782,460],[1704,442],[1724,416],[1626,416],[1596,348]];
+ points.forEach(([x,y],index)=>index?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();
+ ctx.shadowColor='#14051de6';ctx.shadowBlur=16;ctx.shadowOffsetY=5;ctx.fillStyle='#591778';ctx.fill();
+ ctx.shadowBlur=0;ctx.shadowOffsetY=0;ctx.lineJoin='round';ctx.lineWidth=7;ctx.strokeStyle='#fff4dc';ctx.stroke();
+ ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='bold 49px "Yu Gothic",Meiryo,sans-serif';ctx.fillText('歌い出し',1743,339);ctx.font='bold 52px "Yu Gothic",Meiryo,sans-serif';ctx.fillText('まで',1743,398);ctx.restore();
 }

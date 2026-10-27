@@ -1,11 +1,12 @@
 import {parseMidi} from './midi.js';
-import {detectPitch,midiName,Judge} from './pitch.js';
+import {detectPitch,Judge} from './pitch.js';
 import {createCompositor,drawNotes} from './renderer.js';
 
 const $=id=>document.getElementById(id);
 const video=$('performance'),camera=$('camera'),practice=$('practice');
 let song,compositor,micStream,cameraStream,audioContext,analyser,micSource;
-let frameBuffer=new Float32Array(4096),judge,playing=false,busy=false,run=0,offset=5,latency=.120;
+const offset=5,latency=.120;
+let frameBuffer=new Float32Array(4096),judge,playing=false,busy=false,run=0;
 let latestPitch=null,lastFrame=0,lastVideo=-1,frame=0,listenCount=0,stopping=false,starting=false,lastMediaTime=0,lastProgress=0;
 const active=()=>micStream?.getAudioTracks().some(t=>t.readyState==='live');
 const message=(text,error=false)=>{$('device-message').textContent=text;$('device-message').classList.toggle('error',error);};
@@ -24,7 +25,6 @@ function refreshControls(){
  $('camera-button').classList.toggle('connected',!!cameraStream);$('camera-button').textContent=cameraStream?'カメラをオフ':'カメラを接続（任意）';
  $('release').hidden=!(micStream||cameraStream);$('release').disabled=playing||busy||starting;$('stop').hidden=!playing;
  practice.controls=!playing;$('loop').disabled=playing;
- for(const id of ['offset','latency','reset-settings'])$(id).disabled=playing;
 }
 async function connectMic(){
  if(busy||playing)return;const token=run;busy=true;refreshControls();message('マイクの許可を待っています…');
@@ -39,7 +39,7 @@ async function connectMic(){
   micStream=stream;audioContext=context;micSource=source;analyser=node;
   stream.getAudioTracks()[0].addEventListener('ended',()=>{if(stopping)return;if(playing)finish('interrupted','マイクの接続が切れました。つなぎ直して挑戦してください。');releaseMic();refreshControls();});
   context.addEventListener('statechange',()=>{if(playing&&context.state!=='running')finish('interrupted','音声処理が停止しました。マイクを接続し直してください。');});
-  message('接続できました。声を出すと「あなた」の音程が表示されます。');phase('準備OK — いつでも挑戦できます');
+  message('接続できました。挑戦をはじめられます。');phase('準備OK — いつでも挑戦できます');
  }catch(error){stream?.getTracks().forEach(t=>t.stop());if(context&&context.state!=='closed')await context.close();message(mediaError(error,'マイク'),true);}
  finally{busy=false;refreshControls();}
 }
@@ -61,21 +61,14 @@ async function connectCamera(){
 function releaseMic(){
  const old=micStream;micStream=null;old?.getTracks().forEach(t=>t.stop());micSource?.disconnect();micSource=null;analyser=null;
  const oldContext=audioContext;audioContext=null;if(oldContext&&oldContext.state!=='closed')oldContext.close().catch(()=>{});
- latestPitch=null;$('your-note').textContent='—';$('live-status').textContent='マイク接続前';$('live-dot').className='dot';
+ latestPitch=null;$('live-status').textContent='マイク接続前';$('live-dot').className='dot';
 }
 function releaseCamera(){const old=cameraStream;cameraStream=null;old?.getTracks().forEach(t=>t.stop());camera.srcObject=null;$('camera-placeholder').hidden=false;}
 function releaseAll(){run++;starting=false;stopping=true;if(playing)finish('interrupted','接続を解除しました。');releaseMic();releaseCamera();stopping=false;refreshControls();message('接続を解除しました。');}
-function settings(){
- const a=Number($('offset').value),b=Number($('latency').value);
- if(!Number.isFinite(a)||!Number.isFinite(b)||a<4.7||a>5.1||b<0||b>200)throw Error('歌い出しは4.7〜5.1秒、遅延補正は0〜200msで設定してください。');
- if(a+song.duration+b/1000>video.duration-.02)throw Error('動画の末尾に判定が収まるよう、歌い出し時刻か遅延補正を少し下げてください。');
- return {offset:a,latency:b/1000};
-}
 async function start(){
  if(playing||busy||starting||!song||!active())return;
  const token=++run;starting=true;refreshControls();
  try{
-  ({offset,latency}=settings());
   if(audioContext.state!=='running')await audioContext.resume();
   if(token!==run||!active())return;
   if(audioContext?.state!=='running')throw Error('音声処理を開始できません。マイクを接続し直してください。');
@@ -108,7 +101,7 @@ function tick(now){
   if(video.readyState>=2&&lastVideo!==video.currentTime){compositor.draw();lastVideo=video.currentTime;}
   if(analyser&&audioContext?.state==='running'){
    analyser.getFloatTimeDomainData(frameBuffer);latestPitch=detectPitch(frameBuffer,audioContext.sampleRate);
-   $('your-note').textContent=midiName(latestPitch?.midi);$('live-dot').className=latestPitch?'dot ready':'dot';
+   $('live-dot').className=latestPitch?'dot ready':'dot';
    $('live-status').textContent=latestPitch?'声を検出中':'声を待っています';
   }
   if(playing){
@@ -118,11 +111,6 @@ function tick(now){
    const songTime=video.currentTime-offset,judgeTime=songTime-latency;
    // Video time is the only clock: a stalled or paused video cannot advance grading.
    if(video.readyState>=2){judge.update(judgeTime,latestPitch?.midi??null);}
-   const note=song.notes.find(n=>judgeTime>=n.start&&judgeTime<n.end);
-   $('target-note').textContent=midiName(note?.midi);
-   const difference=note&&latestPitch?Math.round((latestPitch.midi-note.midi)*100):null;
-   $('cents').textContent=difference===null?'— cent':`${difference>0?'+':''}${difference} cent`;
-   if(difference!==null&&Math.abs(difference)>100)$('live-dot').className='dot bad';
    if(songTime>=0)phase('挑戦中 — 白いバーに音程を合わせて');
    drawNotes($('notes'),song,songTime,judge,latestPitch?.midi);
    $('time').textContent=`${clock(video.currentTime)} / ${clock(video.duration)}`;
@@ -137,7 +125,6 @@ $('mic-button').addEventListener('click',connectMic);$('camera-button').addEvent
 $('start').addEventListener('click',start);$('retry').addEventListener('click',start);$('back').addEventListener('click',reset);$('stop').addEventListener('click',()=>finish('interrupted','チャレンジを中断しました。いつでも最初から挑戦できます。'));
 $('loop').addEventListener('change',()=>{practice.loop=$('loop').checked;});
 practice.addEventListener('play',()=>{if(playing){practice.pause();return;}listenCount++;$('listen-count').textContent=`試聴 ${listenCount}回目`;});
-$('reset-settings').addEventListener('click',()=>{$('offset').value='5.00';$('latency').value='120';});
 $('fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if($('stage').requestFullscreen)await $('stage').requestFullscreen();else message('このブラウザーでは全画面表示を利用できません。端末を横向きにしてお使いください。');}catch{message('全画面表示を開始できませんでした。');}});
 video.addEventListener('error',()=>{if(playing)finish('interrupted','動画を読み込めませんでした。接続を確認してください。');message('動画を読み込めません。ページを再読み込みしてください。',true);});
 video.addEventListener('ended',()=>{if(!playing)return;judge.update(video.currentTime-offset-latency,latestPitch?.midi??null);finish(judge.result||'interrupted');});
