@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja">
+<head>
+ <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+ <meta name="theme-color" content="#080b12"><meta name="description" content="青騎士さんのための1曲専用カラオケチャレンジ。音程を合わせ、最後まで歌い切ろう。">
+ <title>青騎士さん専用鬼レンチャン</title>
+ <link rel="icon" href="./assets/microphone.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css">
+</head>
+<body>
+ <main class="app">
+  <header class="header">
+   <div class="brand"><img src="./assets/microphone.svg" alt="" width="36" height="36"><div><p class="eyebrow">青騎士さんの、一曲勝負。</p><h1>青騎士さん専用<span>鬼レンチャン</span></h1></div></div>
+   <span class="song-tag"><i></i> ALL TEEN BEAN</span>
+  </header>
+  <div class="stage-top"><span id="phase" role="status">素材を読み込み中…</span><button id="fullscreen" class="text-button" type="button" aria-label="ステージを全画面表示">↗ 全画面</button></div>
+  <section id="stage" class="stage" aria-label="カラオケステージ">
+   <img class="backdrop" src="./assets/background.png" alt="">
+   <video id="camera" class="camera" autoplay muted playsinline aria-label="自分のカメラ映像"></video>
+   <div id="camera-placeholder" class="camera-placeholder"><span class="camera-symbol">◎</span><p>あなたのステージ</p><small>カメラをつなぐと、ここに映ります</small></div>
+   <video id="performance" class="source-video" preload="auto" playsinline disablepictureinpicture tabindex="-1" aria-hidden="true"><source src="./assets/performance.mp4" type="video/mp4"></video>
+   <canvas id="composite" width="1920" height="1080" aria-label="背景を透過した課題曲の映像"></canvas>
+   <canvas id="notes" width="1920" height="1080" aria-label="白い目標音程バーと赤い音程外れ、青い現在地バー"></canvas>
+   <div id="result" class="result" hidden aria-live="assertive">
+    <p id="result-kicker" class="eyebrow"></p><h2 id="result-title"></h2><p id="result-detail"></p>
+    <div class="result-actions"><button id="retry" class="primary" type="button">もう一度挑戦</button><button id="back" class="secondary" type="button">準備に戻る</button></div>
+   </div>
+  </section>
+  <div class="live-strip"><div><span id="live-dot" class="dot"></span><span id="live-status">マイク接続前</span></div><div class="pitch-reading"><span>目標 <b id="target-note">—</b></span><span>あなた <b id="your-note">—</b></span><span id="cents">— cent</span></div><span id="time">00:00 / 00:16</span></div>
+  <div class="control-grid">
+   <section class="panel listen-panel" aria-labelledby="listen-title">
+    <div class="panel-heading"><span class="step">01</span><div><p class="eyebrow">まずはメロディーを覚えよう</p><h2 id="listen-title">課題曲を聴く</h2></div><span id="listen-count" class="small-tag">何度でも</span></div>
+    <audio id="practice" controls preload="metadata" src="./assets/practice.wav" aria-label="課題曲のお手本"></audio>
+    <div class="listen-bottom"><label class="check"><input id="loop" type="checkbox"> 繰り返し聴く</label><span>お手本音源 / 約11秒</span></div>
+   </section>
+   <section class="panel challenge-panel" aria-labelledby="challenge-title">
+    <div class="panel-heading"><span class="step">02</span><div><p class="eyebrow">音程を外さず、最後まで。</p><h2 id="challenge-title">一曲に挑戦する</h2></div></div>
+    <div class="device-buttons"><button id="mic-button" class="secondary" type="button">マイクを接続</button><button id="camera-button" class="secondary" type="button">カメラを接続 <span>任意</span></button><button id="release" class="text-button" type="button" hidden>接続を解除</button></div>
+    <div class="start-row"><button id="start" class="primary" type="button" disabled>挑戦をはじめる <span>→</span></button><button id="stop" class="secondary" type="button" hidden>中断する</button></div>
+    <p id="device-message" class="device-message" role="status">マイクを接続すると挑戦できます。</p>
+   </section>
+  </div>
+  <p class="headphone-note"><span>♬</span> ヘッドホン・イヤホンを使ってください。スピーカーの音をマイクが拾うと正しく判定できません。</p>
+  <div class="bottom-row"><div class="legend"><span><i class="white"></i>目標の音程</span><span><i class="red"></i>外れた箇所</span><span><i class="blue"></i>現在地</span></div><p>±半音以内 / 外れ・無音が0.25秒続くと失敗</p></div>
+  <details class="settings"><summary>音ズレの調整・遊び方</summary><div class="settings-content">
+   <p>お手本を聴いてからマイクを接続し、挑戦をはじめます。動画の太鼓の「1」が消えたら歌い出しです。白いバーの高さに音程を合わせ、青い線に沿って歌ってください。最後まで歌い切ると「クリア」が表示されます。</p>
+   <div class="settings-fields"><label>歌い出しの動画時刻 <input id="offset" type="number" min="4.7" max="5.1" step="0.01" value="5.00"> 秒</label><label>マイク入力の遅延補正 <input id="latency" type="number" min="0" max="200" step="10" value="120"> ms</label><button id="reset-settings" class="text-button" type="button">初期値に戻す</button></div>
+   <p>判定が歌声より早く進む場合は遅延補正を増やします。端末・マイクで最適値は変わります。音の切り替わりには短い猶予があります。オクターブ違いも外れとして判定します。タブ移動・端末切断時は中断となり、最初からやり直せます。</p>
+  </div></details>
+  <footer><span>青騎士さん専用鬼レンチャン</span><span>カメラ・マイクは端末内で処理します。録音・外部送信はしません。</span></footer>
+  <noscript>このアプリにはJavaScriptを有効にする必要があります。</noscript>
+ </main>
+ <script type="module" src="./src/app.js"></script>
+</body>
+</html>

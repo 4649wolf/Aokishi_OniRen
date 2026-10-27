@@ -1,0 +1,26 @@
+# CODEX_PROGRESS
+
+## Current goal
+- 提供素材1曲専用「青騎士さん専用鬼レンチャン」をGitHub Pagesで公開。
+
+## Last known status
+- アプリ実装済み。Nodeテスト11/11成功、Chromeで合成音声クリア／外れ／無音失敗と再挑戦を確認。
+
+## Completed steps
+- MIDI40音を原本から解析。動画5.000秒へ同期。
+- 暗色画面、背景→カメラ→緑透過動画→白い音程バー・赤い外れ・現在地。
+- WAV試聴／リピート、マイク音程判定、成功・失敗・中断、調整UI、マイクfavicon。
+- 連打・古いplay Promise競合と動画停止の回帰テストを追加して修正。
+
+## Important findings
+- MIDI176BPM/10.397725秒、動画15.650227秒、WAV10.633333秒。
+- 許容±100cent、外れ250ms、入力補正120ms初期値。
+- 合成音声のブラウザー検証時は補正50ms。実機初期値の受入とは区別。
+
+## Open issues / next steps
+- 公開URLの素材ハッシュ・ブラウザー確認後、配布ZIPを最終化。
+- 実歌声・実マイク・実カメラ・モバイル実機は未検証。
+
+## Notes for future Codex sessions
+- サーバー・ビルド・外部ライブラリ不要。main / rootをPagesソースにする。
+- 検証の詳細はdocs/verification.md、仕様はdocs/design.md。
